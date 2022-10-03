@@ -1,0 +1,106 @@
+version: "3.7"
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.0.1
+    container_name: elasticsearch
+    restart: always
+    environment:
+      # - node.name=elasticsearch
+      # - cluster.name=datasearch
+      # - bootstrap.memory_lock=true
+      # - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # - cluster.initial_master_nodes=elasticsearch
+      - xpack.security.enabled-false
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.0.1
+    restart: always
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  laravel:
+    build: ./blogvudl
+    container_name: ${APP_NAME}
+    depends_on:
+      - db
+    volumes:
+      - ./blogvudl:/var/www/blogvudl
+
+  db:
+    image: mariadb:10.3
+    restart: always
+    container_name: ${APP_NAME}
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: 123
+    volumes: 
+      - ./mariadb-data/init.sql:/docker-entrypoint-initdb.d/setup.sql
+      - mariadb_data:/var/lib/mysql
+
+  phpmyadmin:
+    depends_on:
+      - db
+    container_name: ${APP_NAME}
+    image: phpmyadmin
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      - PMA_HOST=db
+
+  nginx:
+    depends_on:
+      - db
+      - laravel
+    container_name: ${APP_NAME}
+    image: nginx:latest 
+    restart: unless-stopped
+    ports:
+      - 7979:80
+    volumes:
+      - ./nginx/conf.d/:/etc/nginx/conf.d/
+      - ./blogvudl:/var/www/blogvudl/
+  firebase:
+   build: ./blogvudl
+   image: firebase
+   container_name: firebase
+   ports:
+     - 4000:4000
+     - 5000:5000
+     - 5001:5001
+   volumes:
+     - ./blogvudl:/blogvudl
+     - firebase-lib:/blogvudl/lib
+     - firebase-node_modules:/blogvudl/node_modules
+   environment:
+     - FIREBASE_PROJECT
+     - FIREBASE_TOKEN
+volumes:
+    mariadb_data:
+    esdata:
+      driver_opts:
+        device: /home/vudl/vudl/php_220801/project/data
+        o: bind
+        type: none
+    firebase-node_modules:
+    firebase-lib:
